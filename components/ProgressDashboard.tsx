@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserStats, SessionBreakdown, WordItem, WordStatus } from '../types';
 import { Button } from './Button';
-import { Plus, Zap, AlertTriangle, Mic, Sliders, BookOpen, Target, TrendingUp, Play, Flame, Calendar } from 'lucide-react';
+import { Plus, Zap, AlertTriangle, Mic, Sliders, BookOpen, Target, TrendingUp, Play, Flame, Calendar, Volume2, Loader2 } from 'lucide-react';
+import { playTextToSpeech } from '../services/geminiService';
 
 interface ProgressDashboardProps {
   stats: UserStats;
@@ -12,6 +13,7 @@ interface ProgressDashboardProps {
   allWords?: WordItem[];
   onImportClick: () => void;
   onStartLearning: () => void;
+  onStartWeakWordsReview?: (weakWords: WordItem[]) => void;
   onPracticePronunciation: () => void;
   onOpenSettings: () => void;
   onStartStory: () => void;
@@ -54,6 +56,7 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
   allWords = [],
   onImportClick, 
   onStartLearning,
+  onStartWeakWordsReview,
   onPracticePronunciation,
   onOpenSettings,
   onStartStory,
@@ -63,6 +66,19 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
   breakdown
 }) => {
   const isGoalMet = stats.wordsLearnedToday >= stats.settings.dailyTarget;
+  const remaining = Math.max(0, stats.settings.dailyTarget - stats.wordsLearnedToday);
+  
+  // Get weak words for review
+  const weakWords = allWords.filter(w => 
+    w.status === WordStatus.MISTAKE || 
+    (w.status === WordStatus.LEARNED && w.strengthScore < 40)
+  );
+  
+  const handleWeakWordsClick = () => {
+    if (weakWords.length > 0 && onStartWeakWordsReview) {
+      onStartWeakWordsReview(weakWords);
+    }
+  };
   
   // Calculate tomorrow's focus words preview
   const getTomorrowFocusWords = (): WordItem[] => {
@@ -77,6 +93,44 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
   const tomorrowDate = new Date();
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowDateString = tomorrowDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  
+  // Audio playback state
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  
+  const playWordAudio = async (word: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    if (playingAudio === word) return; // Already playing
+    
+    setPlayingAudio(word);
+    try {
+      await playTextToSpeech(word, () => {
+        setPlayingAudio(null);
+      });
+    } catch (error) {
+      console.error("Error playing audio:", error);
+      setPlayingAudio(null);
+    }
+  };
+  
+  const playExampleAudio = async (example: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const key = `example-${example}`;
+    if (playingAudio === key) return;
+    
+    setPlayingAudio(key);
+    try {
+      await playTextToSpeech(example, () => {
+        setPlayingAudio(null);
+      });
+    } catch (error) {
+      console.error("Error playing audio:", error);
+      setPlayingAudio(null);
+    }
+  };
   
   return (
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -98,58 +152,70 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
               </div>
             </div>
             <LinearProgress current={stats.wordsLearnedToday} max={stats.settings.dailyTarget} />
-            {isGoalMet && (
+            {isGoalMet ? (
               <p className="text-sm text-green-600 font-medium mt-2">🎉 Daily goal achieved!</p>
+            ) : (
+              <p className="text-sm text-slate-600 font-medium mt-2">
+                {remaining} word{remaining !== 1 ? 's' : ''} remaining to complete today's target
+              </p>
             )}
           </div>
 
-          {/* Right: Quick Stats - Material Design Cards */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-slate-50 rounded-xl p-4 text-center border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer" onClick={onViewAllWords || onImportClick}>
-              <div className="text-3xl font-bold text-slate-900 mb-1">{totalWords}</div>
-              <div className="text-xs font-medium text-slate-600 uppercase tracking-wide">Words</div>
+          {/* Right: Today's Target & Remaining - Material Design Cards */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-blue-50 rounded-xl p-4 text-center border border-blue-200">
+              <div className="text-3xl font-bold text-blue-600 mb-1">{stats.settings.dailyTarget}</div>
+              <div className="text-xs font-medium text-blue-600 uppercase tracking-wide">Today's Target</div>
             </div>
-            <div className={`rounded-xl p-4 text-center border transition-colors cursor-pointer ${
-              mistakesCount > 0 
-                ? 'bg-red-50 border-red-200 hover:bg-red-100' 
-                : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+            <div className={`rounded-xl p-4 text-center border ${
+              remaining > 0 
+                ? 'bg-orange-50 border-orange-200' 
+                : 'bg-green-50 border-green-200'
             }`}>
-              <div className={`text-3xl font-bold mb-1 ${mistakesCount > 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                {mistakesCount}
+              <div className={`text-3xl font-bold mb-1 ${remaining > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                {remaining}
               </div>
               <div className={`text-xs font-medium uppercase tracking-wide ${
-                mistakesCount > 0 ? 'text-red-600' : 'text-slate-600'
+                remaining > 0 ? 'text-orange-600' : 'text-green-600'
               }`}>
-                Mistakes
+                Remaining
               </div>
-            </div>
-            <div className="bg-slate-50 rounded-xl p-4 text-center border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer" onClick={onViewAllStories}>
-              <div className="text-3xl font-bold text-slate-900 mb-1">{storyCount}</div>
-              <div className="text-xs font-medium text-slate-600 uppercase tracking-wide">Stories</div>
             </div>
           </div>
         </div>
 
-        {/* Session Breakdown - Material Design Style */}
+        {/* Session Breakdown - Clean Design */}
         {breakdown.total > 0 && (
           <div className="mt-6 pt-6 border-t border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Session Preview</h3>
-              <span className="text-xs text-slate-500">~{breakdown.estimatedMinutes} min</span>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Ready to Learn</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">{breakdown.total} words</span>
+                <span className="text-xs text-slate-400">•</span>
+                <span className="text-xs text-slate-500">~{breakdown.estimatedMinutes} min</span>
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
-                <div className="text-2xl font-bold text-green-700 mb-1">{breakdown.newCount}</div>
-                <div className="text-xs font-medium text-green-600">New Words</div>
-              </div>
-              <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
-                <div className="text-2xl font-bold text-blue-700 mb-1">{breakdown.reviewCount}</div>
-                <div className="text-xs font-medium text-blue-600">To Review</div>
-              </div>
-              <div className="bg-orange-50 rounded-lg p-4 text-center border border-orange-200">
-                <div className="text-2xl font-bold text-orange-700 mb-1">{breakdown.weakCount}</div>
-                <div className="text-xs font-medium text-orange-600">Weak Words</div>
-              </div>
+            <div className="flex items-center gap-3">
+              {breakdown.newCount > 0 && (
+                <div className="flex items-center gap-2 bg-green-50 rounded-lg px-3 py-2 border border-green-200">
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  <span className="text-sm font-semibold text-green-700">{breakdown.newCount}</span>
+                  <span className="text-xs text-green-600">New</span>
+                </div>
+              )}
+              {breakdown.weakCount > 0 ? (
+                <button
+                  onClick={handleWeakWordsClick}
+                  className="flex items-center gap-2 bg-orange-50 rounded-lg px-3 py-2 border border-orange-200 hover:bg-orange-100 hover:border-orange-300 transition-all cursor-pointer active:scale-95"
+                >
+                  <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                  <span className="text-sm font-semibold text-orange-700">{breakdown.weakCount}</span>
+                  <span className="text-xs text-orange-600">Weak</span>
+                  <span className="text-xs text-orange-500 ml-1">• Click to review</span>
+                </button>
+              ) : breakdown.newCount === 0 && (
+                <div className="text-xs text-slate-500 italic">No words ready for review</div>
+              )}
             </div>
           </div>
         )}
@@ -297,10 +363,39 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
             {todayFocusWords.slice(0, 8).map((word) => (
               <div
                 key={word.id}
-                className="bg-slate-50 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-100 transition-colors"
+                className="bg-slate-50 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-100 transition-colors group"
               >
-                <div className="font-semibold text-sm text-slate-900 mb-0.5">{word.word}</div>
-                <div className="text-xs text-slate-600 line-clamp-1">{word.meaning}</div>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="font-semibold text-sm text-slate-900 flex-1">{word.word}</div>
+                  <button
+                    onClick={(e) => playWordAudio(word.word, e)}
+                    className="p-1 hover:bg-slate-200 rounded transition-colors"
+                    title="Play word audio"
+                  >
+                    {playingAudio === word.word ? (
+                      <Loader2 className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5 text-indigo-600" />
+                    )}
+                  </button>
+                </div>
+                <div className="text-xs text-slate-600 line-clamp-1 mb-1">{word.meaning}</div>
+                  {word.example && (
+                    <div className="flex items-center gap-1 mt-1 pt-1 border-t border-slate-200">
+                      <div className="text-xs text-slate-500 italic line-clamp-1 flex-1">{word.example}</div>
+                      <button
+                        onClick={(e) => playExampleAudio(word.example, e)}
+                        className="p-0.5 hover:bg-slate-200 rounded transition-colors"
+                        title="Play example audio"
+                      >
+                        {playingAudio === `example-${word.example}` ? (
+                          <Loader2 className="w-3 h-3 text-blue-600 animate-spin" />
+                        ) : (
+                          <Volume2 className="w-3 h-3 text-blue-600" />
+                        )}
+                      </button>
+                    </div>
+                  )}
               </div>
             ))}
             {todayFocusWords.length > 8 && (
@@ -341,10 +436,39 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
               {tomorrowFocusWords.slice(0, 6).map((word) => (
                 <div
                   key={word.id}
-                  className="bg-blue-50 rounded-lg border border-blue-200 px-3 py-2"
+                  className="bg-blue-50 rounded-lg border border-blue-200 px-3 py-2 group"
                 >
-                  <div className="font-semibold text-sm text-slate-900 mb-0.5">{word.word}</div>
-                  <div className="text-xs text-slate-600 line-clamp-1">{word.meaning}</div>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="font-semibold text-sm text-slate-900 flex-1">{word.word}</div>
+                    <button
+                      onClick={(e) => playWordAudio(word.word, e)}
+                      className="p-1 hover:bg-blue-100 rounded transition-colors"
+                      title="Play word audio"
+                    >
+                      {playingAudio === word.word ? (
+                        <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                      ) : (
+                        <Volume2 className="w-3.5 h-3.5 text-blue-600" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="text-xs text-slate-600 line-clamp-1 mb-1">{word.meaning}</div>
+                  {word.example && (
+                    <div className="flex items-center gap-1 mt-1 pt-1 border-t border-blue-200">
+                      <div className="text-xs text-slate-500 italic line-clamp-1 flex-1">{word.example}</div>
+                      <button
+                        onClick={(e) => playExampleAudio(word.example, e)}
+                        className="p-0.5 hover:bg-blue-100 rounded transition-colors"
+                        title="Play example audio"
+                      >
+                        {playingAudio === `example-${word.example}` ? (
+                          <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
+                        ) : (
+                          <Volume2 className="w-3 h-3 text-blue-500" />
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {tomorrowFocusWords.length > 6 && (

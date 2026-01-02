@@ -163,6 +163,18 @@ const App: React.FC = () => {
     setView('LEARN');
   };
   
+  const startWeakWordsReview = (weakWords: WordItem[]) => {
+    if (weakWords.length === 0) {
+        alert("No weak words to review!");
+        return;
+    }
+    // Limit to remaining words needed for today's target
+    const remaining = Math.max(0, stats.settings.dailyTarget - stats.wordsLearnedToday);
+    const wordsToReview = weakWords.slice(0, remaining || weakWords.length);
+    setSessionWords(wordsToReview);
+    setView('LEARN');
+  };
+  
   const startPronunciation = () => {
     // Navigate to word selector to choose words for pronunciation
     setView('PRONUNCIATION_SELECT');
@@ -343,6 +355,7 @@ const App: React.FC = () => {
             allWords={allWords}
             onImportClick={() => setView('IMPORT')}
             onStartLearning={startLearning}
+            onStartWeakWordsReview={startWeakWordsReview}
             onPracticePronunciation={startPronunciation}
             onOpenSettings={() => setShowSettings(true)}
             onStartStory={startStory}
