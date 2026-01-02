@@ -28,7 +28,10 @@ const LinearProgress = ({ current, max }: { current: number; max: number }) => {
     <div className="w-full">
       <div className="flex justify-between items-center mb-2">
         <span className="text-sm font-medium text-slate-700">Daily Goal</span>
-        <span className="text-sm font-semibold text-slate-600">{current} / {max}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-slate-600">{current} / {max}</span>
+          <span className="text-sm font-bold text-slate-700">({Math.round(percentage)}%)</span>
+        </div>
       </div>
       <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
         <div 
