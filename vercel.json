@@ -9,11 +9,6 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "env": {
-    "VITE_SUPABASE_URL": "@supabase_url",
-    "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key",
-    "GEMINI_API_KEY": "@gemini_api_key"
-  }
+  ]
 }
 
