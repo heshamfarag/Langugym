@@ -340,6 +340,7 @@ const App: React.FC = () => {
             mistakesCount={mistakes.length}
             storyCount={userStories.length}
             todayFocusWords={todayFocusWords}
+            allWords={allWords}
             onImportClick={() => setView('IMPORT')}
             onStartLearning={startLearning}
             onPracticePronunciation={startPronunciation}
